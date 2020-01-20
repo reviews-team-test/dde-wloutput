@@ -26,6 +26,8 @@
 #include <outputdevice.h>
 #include <registry.h>
 #include <connection_thread.h>
+#include <outputconfiguration.h>
+#include <outputmanagement.h>
 
 using namespace KWayland::Client;
 
@@ -34,62 +36,76 @@ bool beConnect = false;
 int main(int argc, char *argv[])
 {
     QCoreApplication app(argc, argv);
-    
+
     qDebug() << "start Connection";
-    
+
     auto conn = new ConnectionThread;
     auto thread = new QThread;
     conn->moveToThread(thread);
     thread->start();
-    
+
     conn->initConnection();
 
     Registry *reg = nullptr;
-    QObject::connect(conn, &ConnectionThread::connected, [conn, &reg]{
+    QObject::connect(conn, &ConnectionThread::connected, [conn, &reg] {
         qDebug() << "connect successfully to wayland at socket:" << conn->socketName();
 
         reg = new Registry;
         reg->create(conn);
         reg->setup();
 
-        QObject::connect(reg, &Registry::outputDeviceAnnounced, [reg](quint32 name, quint32 version){
-	    qDebug() << "output device announced with name: " << name << " and version :" << version;
+        QObject::connect(reg, &Registry::outputDeviceAnnounced, [reg](quint32 name, quint32 version)
+        {
+            qDebug() << "output device announced with name: " << name << " and version :" << version;
             auto dev = reg->createOutputDevice(name, version);
-	    if (!dev) {
-	        qDebug() << "get dev error!";
-	        return;
-	    }
-	    QObject::connect(dev, &OutputDevice::changed, [dev]{
-	        auto modes = dev->modes();
-	        qDebug() << "get dev modes size: " << modes.size();
-	        for(auto m : modes) {
-	        	qDebug() << "mode size:" << m.size << "rate:" << m.refreshRate;
-	        }
+            if (!dev) {
+                qDebug() << "get dev error!";
+                return;
+            }
+            auto manager = reg->createOutputManagement(name, version);
+            auto conf = manager->createConfiguration();
+            QObject::connect(conf, &OutputConfiguration::applied, []() {
+                qDebug() << "Configuration applied!";
+            });
+            QObject::connect(conf, &OutputConfiguration::failed, []() {
+                qDebug() << "Configuration failed!";
+            });
+            QObject::connect(dev, &OutputDevice::changed, [dev] {
+                auto modes = dev->modes();
+                qDebug() << "get dev modes size: " << modes.size();
+                for (auto m : modes)
+                {
+                    qDebug() << "mode size:" << m.size << "rate:" << m.refreshRate;
+                }
                 beConnect = true;
-	    });
-		beConnect = true;
-	});
-        QObject::connect(reg, &Registry::outputDeviceRemoved, [](quint32 name){
+            });
+
+            conf->setTransform(dev, OutputDevice::Transform::Rotated90);
+            beConnect = true;
+        });
+        QObject::connect(reg, &Registry::outputDeviceRemoved, [](quint32 name)
+        {
             qDebug() << "output device removed with name: " << name;
             beConnect = true;
         });
 
-        do {
+        do
+        {
             beConnect = false;
             conn->roundtrip();
         } while (beConnect);
 
-	exit(0);
+        exit(0);
     });
-    QObject::connect(conn, &ConnectionThread::failed, [conn]{
+    QObject::connect(conn, &ConnectionThread::failed, [conn] {
         qDebug() << "connect failed to wayland at socket:" << conn->socketName();
         beConnect = true;
     });
-    QObject::connect(conn, &ConnectionThread::failed, [conn]{
+    QObject::connect(conn, &ConnectionThread::failed, [conn] {
         qDebug() << "connect failed to wayland at socket:" << conn->socketName();
         beConnect = true;
     });
-    QObject::connect(conn, &ConnectionThread::connectionDied, [conn, reg]{
+    QObject::connect(conn, &ConnectionThread::connectionDied, [conn, reg] {
         qDebug() << "connect failed to wayland at socket:" << conn->socketName();
         reg->deleteLater();
         beConnect = false;
