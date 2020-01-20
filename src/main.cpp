@@ -31,8 +31,6 @@ using namespace KWayland::Client;
 
 int main(int argc, char *argv[])
 {
-    QCoreApplication a(argc, argv);
-
     qDebug() << "start Connection";
     
     auto conn = new ConnectionThread;
@@ -41,19 +39,33 @@ int main(int argc, char *argv[])
     thread->start();
     
     conn->initConnection();
+    bool beConnect = true;
+
     QObject::connect(conn, &ConnectionThread::connected, [conn]{
         qDebug() << "connect successfully to wayland at socket:" << conn->socketName();
 
-	Registry reg;
-	reg.create(conn);
-	reg.setup();
-
-
+        Registry reg;
+        reg.create(conn);
+        reg.setup();
     });
     QObject::connect(conn, &ConnectionThread::failed, [conn]{
         qDebug() << "connect failed to wayland at socket:" << conn->socketName();
     });
-    
+    QObject::connect(conn, &ConnectionThread::failed, [conn]{
+        qDebug() << "connect failed to wayland at socket:" << conn->socketName();
+    });
+    QObject::connect(conn, &ConnectionThread::connectionDied, [conn, &beConnect]{
+        qDebug() << "connect failed to wayland at socket:" << conn->socketName();
+        beConnect = false;
+    });
+    QObject::connect(conn, &ConnectionThread::eventsRead, [conn] {
 
-    return a.exec();
+    });
+
+    conn->roundtrip();
+    while(beConnect) {
+        conn->roundtrip();
+    }
+    
+    return 1;
 }
