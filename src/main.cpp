@@ -63,10 +63,10 @@ int main(int argc, char *argv[])
 
             qDebug() << "output management announced with name :" << name << " & version :" << version;
             manager = reg->createOutputManagement(name, version);
-	    if (!manager || !manager->isValid()) {
-	    	qDebug() << "manager is nullptr or not valid!";
-		return;
-	    }
+            if (!manager || !manager->isValid()) {
+                qDebug() << "manager is nullptr or not valid!";
+                return;
+            }
             qDebug() << "create output configuretion";
             conf = manager->createConfiguration();
             qDebug() << "create output done";
@@ -98,20 +98,27 @@ int main(int argc, char *argv[])
                     {
                         qDebug() << "mode size:" << m.size << "rate:" << m.refreshRate;
                     }
+
+                    if (!manager || !manager->isValid()) {
+                        qDebug() << "manager is nullptr or not valid!";
+                        return;
+                    }
+                    if (!conf || !conf->isValid()) {
+                        qDebug() << "output configure is null or is not valid";
+                        return;
+                    }
+                    qDebug() << "set output transform to Rotated90";
+                    conf->setTransform(dev, OutputDevice::Transform::Rotated90);
+                    qDebug() << "get dev modes size: " << dev->modes().size();
+                    for (auto m : dev->modes()) {
+                        if (m.size == QSize(1024, 768)) {
+                            qDebug() << "change mode to 1024x768";
+                            conf->setMode(dev, m.id);
+                        }
+                    }
+                    qDebug() << "apply changed";
+                    conf->apply();
                 });
-             
-	        if (!manager || !manager->isValid()) {
-	            qDebug() << "manager is nullptr or not valid!";
-	            return;
-	        }
-	        if (!conf || !conf->isValid()) {
-                    qDebug() << "output configure is null or is not valid";
-                    return;
-	        }
-                qDebug() << "set output transform to Rotated90";
-                conf->setTransform(dev, OutputDevice::Transform::Rotated90);
-                qDebug() << "apply changed";
-                conf->apply();
             });
         });
 
