@@ -41,12 +41,20 @@ int main(int argc, char *argv[])
     conn->initConnection();
     bool beConnect = true;
 
-    QObject::connect(conn, &ConnectionThread::connected, [conn]{
+    Registry *reg = nullptr;
+    QObject::connect(conn, &ConnectionThread::connected, [conn, &reg]{
         qDebug() << "connect successfully to wayland at socket:" << conn->socketName();
 
-        Registry reg;
-        reg.create(conn);
-        reg.setup();
+        reg = new Registry;
+        reg->create(conn);
+        reg->setup();
+
+        QObject::connect(reg, &Registry::outputDeviceAnnounced, [](quint32 name, quint32 version){
+            qDebug() << "output device announced with name: " << name << " and version :" << version;
+        });
+        QObject::connect(reg, &Registry::outputDeviceRemoved, [](quint32 name){
+            qDebug() << "output device removed with name: " << name;
+        });
     });
     QObject::connect(conn, &ConnectionThread::failed, [conn]{
         qDebug() << "connect failed to wayland at socket:" << conn->socketName();
@@ -54,8 +62,9 @@ int main(int argc, char *argv[])
     QObject::connect(conn, &ConnectionThread::failed, [conn]{
         qDebug() << "connect failed to wayland at socket:" << conn->socketName();
     });
-    QObject::connect(conn, &ConnectionThread::connectionDied, [conn, &beConnect]{
+    QObject::connect(conn, &ConnectionThread::connectionDied, [conn, &beConnect, reg]{
         qDebug() << "connect failed to wayland at socket:" << conn->socketName();
+        reg->deleteLater();
         beConnect = false;
     });
     QObject::connect(conn, &ConnectionThread::eventsRead, [conn] {
