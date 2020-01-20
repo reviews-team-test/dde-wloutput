@@ -33,17 +33,27 @@ int main(int argc, char *argv[])
 {
     QCoreApplication a(argc, argv);
 
+    qDebug() << "start Connection";
+    
     auto conn = new ConnectionThread;
     auto thread = new QThread;
     conn->moveToThread(thread);
     thread->start();
-
+    
+    conn->initConnection();
     QObject::connect(conn, &ConnectionThread::connected, [conn]{
         qDebug() << "connect successfully to wayland at socket:" << conn->socketName();
+
+	Registry reg;
+	reg.create(conn);
+	reg.setup();
+
+
     });
-    QObject::connect(conn, &ConnectionThread::connected, [conn]{
+    QObject::connect(conn, &ConnectionThread::failed, [conn]{
         qDebug() << "connect failed to wayland at socket:" << conn->socketName();
     });
+    
 
     return a.exec();
 }
