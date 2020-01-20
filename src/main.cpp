@@ -29,8 +29,12 @@
 
 using namespace KWayland::Client;
 
+bool beConnect = false;
+
 int main(int argc, char *argv[])
 {
+    QCoreApplication app(argc, argv);
+    
     qDebug() << "start Connection";
     
     auto conn = new ConnectionThread;
@@ -39,7 +43,6 @@ int main(int argc, char *argv[])
     thread->start();
     
     conn->initConnection();
-    bool beConnect = true;
 
     Registry *reg = nullptr;
     QObject::connect(conn, &ConnectionThread::connected, [conn, &reg]{
@@ -49,20 +52,44 @@ int main(int argc, char *argv[])
         reg->create(conn);
         reg->setup();
 
-        QObject::connect(reg, &Registry::outputDeviceAnnounced, [](quint32 name, quint32 version){
-            qDebug() << "output device announced with name: " << name << " and version :" << version;
-        });
+        QObject::connect(reg, &Registry::outputDeviceAnnounced, [reg](quint32 name, quint32 version){
+	    qDebug() << "output device announced with name: " << name << " and version :" << version;
+            auto dev = reg->createOutputDevice(name, version);
+	    if (!dev) {
+	        qDebug() << "get dev error!";
+	        return;
+	    }
+	    QObject::connect(dev, &OutputDevice::changed, [dev]{
+	        auto modes = dev->modes();
+	        qDebug() << "get dev modes size: " << modes.size();
+	        for(auto m : modes) {
+	        	qDebug() << "mode size:" << m.size << "rate:" << m.refreshRate;
+	        }
+                beConnect = true;
+	    });
+		beConnect = true;
+	});
         QObject::connect(reg, &Registry::outputDeviceRemoved, [](quint32 name){
             qDebug() << "output device removed with name: " << name;
+            beConnect = true;
         });
+
+        do {
+            beConnect = false;
+            conn->roundtrip();
+        } while (beConnect);
+
+	exit(0);
     });
     QObject::connect(conn, &ConnectionThread::failed, [conn]{
         qDebug() << "connect failed to wayland at socket:" << conn->socketName();
+        beConnect = true;
     });
     QObject::connect(conn, &ConnectionThread::failed, [conn]{
         qDebug() << "connect failed to wayland at socket:" << conn->socketName();
+        beConnect = true;
     });
-    QObject::connect(conn, &ConnectionThread::connectionDied, [conn, &beConnect, reg]{
+    QObject::connect(conn, &ConnectionThread::connectionDied, [conn, reg]{
         qDebug() << "connect failed to wayland at socket:" << conn->socketName();
         reg->deleteLater();
         beConnect = false;
@@ -71,10 +98,5 @@ int main(int argc, char *argv[])
 
     });
 
-    conn->roundtrip();
-    while(beConnect) {
-        conn->roundtrip();
-    }
-    
-    return 1;
+    return app.exec();
 }
