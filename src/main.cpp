@@ -49,6 +49,7 @@ int main(int argc, char *argv[])
     Registry *reg = nullptr;
     OutputManagement *manager = nullptr;
     OutputDevice *dev = nullptr;
+    OutputConfiguration *conf = nullptr;
     QObject::connect(conn, &ConnectionThread::connected, [ & ] {
         qDebug() << "connect successfully to wayland at socket:" << conn->socketName();
 
@@ -56,69 +57,70 @@ int main(int argc, char *argv[])
         reg->create(conn);
         reg->setup();
 
-        QObject::connect(reg, &Registry::outputDeviceAnnounced, [ & ](quint32 name, quint32 version) {
-            qDebug() << "output device announced with name: " << name << " and version :" << version;
-            beConnect = true;
-            dev = reg->createOutputDevice(name, version);
-            if (!dev) {
-                qDebug() << "get dev error!";
-                return;
-            }
-            QObject::connect(dev, &OutputDevice::changed, [ & ] {
-                beConnect = true;
-                auto modes = dev->modes();
-                qDebug() << "get dev modes size: " << modes.size();
-                for (auto m : modes)
-                {
-                    qDebug() << "mode size:" << m.size << "rate:" << m.refreshRate;
-                }
-                qDebug() << "create output management";
-                manager = new OutputManagement;
-                manager->setup(reg->bindOutputManagement(name, version));
-                if (!manager)
-                {
-                    qDebug() << "manager is null!";
-                    return;
-                }
-            });
-        });
-        QObject::connect(reg, &Registry::outputManagementAnnounced, [dev, &manager](quint32 name, quint32 version) {
+        QObject::connect(reg, &Registry::outputManagementAnnounced, [ & ](quint32 name, quint32 version) {
             Q_UNUSED(name)
             Q_UNUSED(version)
 
-            qDebug() << "output management announced";
+            qDebug() << "output management announced with name :" << name << " & version :" << version;
+            manager = reg->createOutputManagement(name, version);
+	    if (!manager || !manager->isValid()) {
+	    	qDebug() << "manager is nullptr or not valid!";
+		return;
+	    }
             qDebug() << "create output configuretion";
-            auto conf = manager->createConfiguration();
+            conf = manager->createConfiguration();
             qDebug() << "create output done";
-            if (!conf)
-            {
-                qDebug() << "output configure is null";
+            if (!conf || !conf->isValid()) {
+                qDebug() << "output configure is null or is not vaild";
                 return;
             }
-            QObject::connect(conf, &OutputConfiguration::applied, [conf]()
-            {
+            QObject::connect(conf, &OutputConfiguration::applied, [conf]() {
                 qDebug() << "Configuration applied!";
                 conf->deleteLater();
             });
-            QObject::connect(conf, &OutputConfiguration::failed, [conf]()
-            {
+            QObject::connect(conf, &OutputConfiguration::failed, [conf]() {
                 qDebug() << "Configuration failed!";
                 conf->deleteLater();
             });
-            qDebug() << "set output transform to Rotated90";
-            conf->setTransform(dev, OutputDevice::Transform::Rotated90);
-            qDebug() << "apply changed";
-            conf->apply();
+            QObject::connect(reg, &Registry::outputDeviceAnnounced, [ & ](quint32 name, quint32 version) {
+                qDebug() << "output device announced with name: " << name << " and version :" << version;
+                beConnect = true;
+                dev = reg->createOutputDevice(name, version);
+                if (!dev) {
+                    qDebug() << "get dev error!";
+                    return;
+                }
+                QObject::connect(dev, &OutputDevice::changed, [ & ] {
+                    beConnect = true;
+                    auto modes = dev->modes();
+                    qDebug() << "get dev modes size: " << modes.size();
+                    for (auto m : modes)
+                    {
+                        qDebug() << "mode size:" << m.size << "rate:" << m.refreshRate;
+                    }
+                });
+             
+	        if (!manager || !manager->isValid()) {
+	            qDebug() << "manager is nullptr or not valid!";
+	            return;
+	        }
+	        if (!conf || !conf->isValid()) {
+                    qDebug() << "output configure is null or is not valid";
+                    return;
+	        }
+                qDebug() << "set output transform to Rotated90";
+                conf->setTransform(dev, OutputDevice::Transform::Rotated90);
+                qDebug() << "apply changed";
+                conf->apply();
+            });
         });
 
-        QObject::connect(reg, &Registry::outputDeviceRemoved, [](quint32 name)
-        {
+        QObject::connect(reg, &Registry::outputDeviceRemoved, [](quint32 name) {
             qDebug() << "output device removed with name: " << name;
             beConnect = true;
         });
 
-        do
-        {
+        do {
             beConnect = false;
             conn->roundtrip();
         } while (beConnect);
