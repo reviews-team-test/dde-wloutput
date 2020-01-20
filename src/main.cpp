@@ -57,34 +57,48 @@ int main(int argc, char *argv[])
         QObject::connect(reg, &Registry::outputDeviceAnnounced, [reg](quint32 name, quint32 version)
         {
             qDebug() << "output device announced with name: " << name << " and version :" << version;
+            beConnect = true;
             auto dev = reg->createOutputDevice(name, version);
             if (!dev) {
                 qDebug() << "get dev error!";
                 return;
             }
-            auto manager = reg->createOutputManagement(name, version);
-            auto conf = manager->createConfiguration();
-            QObject::connect(conf, &OutputConfiguration::applied, []() {
-                qDebug() << "Configuration applied!";
-            });
-            QObject::connect(conf, &OutputConfiguration::failed, []() {
-                qDebug() << "Configuration failed!";
-            });
-            QObject::connect(dev, &OutputDevice::changed, [dev] {
+            QObject::connect(dev, &OutputDevice::changed, [ = ] {
+                beConnect = true;
                 auto modes = dev->modes();
                 qDebug() << "get dev modes size: " << modes.size();
                 for (auto m : modes)
                 {
                     qDebug() << "mode size:" << m.size << "rate:" << m.refreshRate;
                 }
-                beConnect = true;
+                qDebug() << "create output management";
+	        auto manager = new OutputManagement;
+		manager->setup(reg->bindOutputManagement(name, version));
+	        if (!manager) {
+	            qDebug() << "manager is null!";
+	            return;
+	        }
+	        
+	        qDebug() << "create output configuretion";
+	        auto conf = manager->createConfiguration();
+	        qDebug() << "create output done";
+		if (!conf) {
+	            qDebug() << "output configure is null";
+	            return;
+	        }
+	        QObject::connect(conf, &OutputConfiguration::applied, [conf]() {
+                    qDebug() << "Configuration applied!";
+		    conf->deleteLater();
+                });
+                QObject::connect(conf, &OutputConfiguration::failed, [conf]() {
+                    qDebug() << "Configuration failed!";
+		    conf->deleteLater();
+                });
+                conf->setTransform(dev, OutputDevice::Transform::Rotated90);
+	        conf->apply();
             });
-
-            conf->setTransform(dev, OutputDevice::Transform::Rotated90);
-            beConnect = true;
         });
-        QObject::connect(reg, &Registry::outputDeviceRemoved, [](quint32 name)
-        {
+        QObject::connect(reg, &Registry::outputDeviceRemoved, [](quint32 name) {
             qDebug() << "output device removed with name: " << name;
             beConnect = true;
         });
