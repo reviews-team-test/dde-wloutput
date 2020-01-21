@@ -211,10 +211,10 @@ void set_output(Registry *reg)
 //          set output eanble x y width height refresh transform
 int main(int argc, char *argv[])
 {
-    if (argc < 2 ||
+    if (argc < 2 || (QString(argv[1]).compare("set") && QString(argv[1]).compare("get")) ||
             (QString(argv[1]).compare("set") == 0 && argc != 10) ||
             (QString(argv[1]).compare("get") == 0 && argc != 2)) {
-        qDebug()<<"Usage: "<<argv[0]<<"<get>/<set <uuid> <enable> <x> <y> <width> <height> <refresh> <transform>>"<<endl;
+        qDebug()<<"Usage: "<<argv[0]<<"<get>/<set <uuid> <enable> <x> <y> <width> <height> <refresh> <transform>>";
         return -1;
     }
 
