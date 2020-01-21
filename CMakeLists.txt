@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.7)
 
-project(kvu-display)
+project(dde_wloutput)
 
-set(TARGET_NAME kvu-display)
+set(TARGET_NAME dde_wloutput)
 
 add_executable(${TARGET_NAME} src/main.cpp)
 
