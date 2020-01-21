@@ -52,7 +52,6 @@ static bool beConnect = false;
 
 
 static OutputManagement *manager = nullptr;
-static OutputDevice *dev = nullptr;
 static OutputConfiguration *conf = nullptr;
 
 #define parse_int_arg(manager,item,str) do { \
@@ -135,17 +134,23 @@ void set_output(Registry *reg)
         }
         QObject::connect(reg, &Registry::outputDeviceAnnounced, [reg](quint32 name, quint32 version) {
             beConnect = true;
-            if (dev)
-                dev->deleteLater();
 
-            dev = reg->createOutputDevice(name, version);
+            auto dev = reg->createOutputDevice(name, version);
             if (!dev || !dev->isValid()) {
                 qDebug() << "get dev is null or not valid!";
                 return;
             }
-            QObject::connect(dev, &OutputDevice::changed, [] {
+
+            QObject::connect(dev, &OutputDevice::changed, [dev] {
                 beConnect = true;
 
+                QString tmode(dev->model());
+                QString uuid = tmode.left(tmode.indexOf(' '));
+                if (cmd_args->cmd_set.uuid != uuid) {
+                    qDebug() << "skip output:" << uuid;
+                    return;
+                }
+                qDebug() << "start set output " << uuid;
                 for (auto m : dev->modes()) {
                     if (m.size.width() == cmd_args->cmd_set.width
                             && m.size.height() == cmd_args->cmd_set.height
@@ -161,6 +166,8 @@ void set_output(Registry *reg)
                 qDebug() << "set output transform to " << cmd_args->cmd_set.transform;
                 conf->setTransform(dev, OutputDevice::Transform(cmd_args->cmd_set.transform));
                 conf->apply();
+                if (dev)
+                    dev->deleteLater();
             });
         });
         QObject::connect(conf, &OutputConfiguration::applied, []() {
@@ -233,8 +240,6 @@ int main(int argc, char *argv[])
         }
         if (reg)
             reg->deleteLater();
-        if (dev)
-            dev->deleteLater();
         if (conf)
             conf->deleteLater();
 
@@ -255,8 +260,6 @@ int main(int argc, char *argv[])
 
         if (reg)
             reg->deleteLater();
-        if (dev)
-            dev->deleteLater();
         if (conf)
             conf->deleteLater();
         if (conf)
