@@ -1,0 +1,5 @@
+kvu-display (0.0.1-1) unstable; urgency=medium
+
+  * Initial release (Closes: #nnnn)  <nnnn is the bug number of your ITP>
+
+ -- liuyong <liuyong@deepin.com>  Tue, 21 Jan 2020 16:48:39 +0800
