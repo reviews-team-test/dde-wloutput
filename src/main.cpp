@@ -1,26 +1,28 @@
 /*
- *  * Copyright (C) 2011 ~ 2019 Deepin Technology Co., Ltd.
- *   *
- *    * Author:     lq <longqi_cm@deepin.com>
- *     *
- *      * Maintainer: lq <longqi_cm@deepin.com>
- *       *
- *        * This program is free software: you can redistribute it and/or modify
- *         * it under the terms of the GNU General Public License as published by
- *          * the Free Software Foundation, either version 3 of the License, or
- *           * any later version.
- *            *
- *             * This program is distributed in the hope that it will be useful,
- *              * but WITHOUT ANY WARRANTY; without even the implied warranty of
- *               * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *                * GNU General Public License for more details.
- *                 *
- *                  * You should have received a copy of the GNU General Public License
- *                   * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- *                    */
+ ** Copyright (C) 2011 ~ 2019 Deepin Technology Co., Ltd.
+ **
+ ** Author:     lq <longqi_cm@deepin.com>
+ **
+ ** Maintainer: lq <longqi_cm@deepin.com>
+ **
+ ** This program is free software: you can redistribute it and/or modify
+ ** it under the terms of the GNU General Public License as published by
+ ** the Free Software Foundation, either version 3 of the License, or
+ ** any later version.
+ **
+ ** This program is distributed in the hope that it will be useful,
+ ** but WITHOUT ANY WARRANTY; without even the implied warranty of
+ ** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ ** GNU General Public License for more details.
+ **
+ ** You should have received a copy of the GNU General Public License
+ ** along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ **/
 
 #include <string.h>
 #include <stdlib.h>
+
+#include <iostream>
 
 #include <QCoreApplication>
 #include <QThread>
@@ -34,9 +36,15 @@
 
 using namespace KWayland::Client;
 
+enum modeFlag {
+    None,
+    Current = 1 << 0,
+    Preferred = 1 << 1
+};
+
 struct command_set {
-    char *uuid;
     bool enabled;
+    char *uuid;
     int x, y;
     int width, height;
     int refresh, transform;
@@ -47,7 +55,7 @@ struct command_argument {
         struct command_set cmd_set;
 };
 
-static struct command_argument *cmd_args = NULL;
+static struct command_argument *cmd_args = nullptr;
 static bool beConnect = false;
 
 
@@ -97,20 +105,34 @@ void free_command_argument(struct command_argument *manager)
 
 void dump_outputs(Registry *reg) {
     QObject::connect(reg, &Registry::outputDeviceAnnounced, [reg](quint32 name, quint32 version){
-        qDebug() << "output device announced with name: " << name << " and version :" << version;
         auto dev = reg->createOutputDevice(name, version);
         if (!dev) {
             qDebug() << "get dev error!";
             return;
         }
         QObject::connect(dev, &OutputDevice::changed, [dev]{
-            qDebug()<<"Output: "<<dev->manufacturer()<<", "<<dev->model()<<", "<<dev->uuid();
-            qDebug()<<"\tproperties:"<<", "<<dev->eisaId()<<", "<<dev->refreshRate()<<", "<<dev->scaleF()<<", "<<dev->isValid();
+            std::cout << dev->model().split(" ").first().toStdString();
+            std::cout<<" "<<((dev->enabled() == OutputDevice::Enablement::Enabled)?"enabled":"disabled");
+            std::cout<<" "<<dev->pixelSize().width()<<"x"<<dev->pixelSize().height();
+            std::cout<<"+"<<dev->globalPosition().x()<<"+"<<dev->globalPosition().y()<<" "<<(dev->refreshRate()/1000.0);
+            std::cout<<" "<<int(dev->transform())<<" "<<dev->scaleF()<<" "<<dev->physicalSize().width()<<"x"<<dev->physicalSize().height();
+            std::cout<<" "<<dev->uuid().toStdString()<<" "<<dev->manufacturer().toStdString()<<std::endl;
+            //            qDebug()<< dev->model().split(" ").first()<<((dev->enabled() == OutputDevice::Enablement::Enabled)?"enabled":"disabled")
+            //                   <<dev->pixelSize().width()<<"x"<<dev->pixelSize().height()
+            //                  <<"+"<<dev->globalPosition().x()<<"+"<<dev->globalPosition().y()<<(dev->refreshRate()/1000.0)
+            //                 <<int(dev->transform())<<dev->scaleF()<<dev->physicalSize().width()<<"x"<<dev->physicalSize().height()
+            //                <<dev->uuid()<<dev->manufacturer();
+
             auto modes = dev->modes();
-            qDebug() << "get dev modes size: " << modes.size();
             for(auto m : modes) {
-                qDebug() << "mode size:" << m.size << "rate:" << m.refreshRate;
+                std::cout<<"\t" << m.size.width()<<"x"<<m.size.height() << "\t" << m.refreshRate/1000.0;
+                std::cout<<((m.flags & modeFlag::Current)?"\tcurrent":"");
+                std::cout<<((m.flags & modeFlag::Preferred)?"\tpreferred":"")<<std::endl;
+                //                qDebug()<<"\t" << m.size.width()<<"x"<<m.size.height() << "\t" << m.refreshRate/1000.0
+                //                       <<((m.flags & modeFlag::Current)?"\tcurrent":"")
+                //                      <<((m.flags & modeFlag::Preferred)?"\tpreferred":"");
             }
+            std::cout<<std::endl;
             beConnect = true;
         });
         beConnect = true;
@@ -200,8 +222,6 @@ int main(int argc, char *argv[])
 
     QCoreApplication app(argc, argv);
 
-    qDebug() << "start Connection";
-
     auto conn = new ConnectionThread;
     auto thread = new QThread;
     conn->moveToThread(thread);
@@ -211,7 +231,6 @@ int main(int argc, char *argv[])
 
     Registry *reg = nullptr;
     QObject::connect(conn, &ConnectionThread::connected, [ & ] {
-        qDebug() << "connect successfully to wayland at socket:" << conn->socketName();
 
         reg = new Registry;
         reg->create(conn);
