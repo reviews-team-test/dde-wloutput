@@ -2,7 +2,7 @@ Source: kvu-display
 Section: devel
 Priority: optional
 Maintainer: liuyong <liuyong@deepin.com>
-Build-Depends: debhelper (>= 11), libkf5wayland-dev, pkg-config
+Build-Depends: debhelper (>= 11), libkf5wayland-dev, pkg-config, cmake
 Standards-Version: 4.1.3
 Homepage: https://gitlab.deepin.io/longqi_cm/kvu-display
 #Vcs-Browser: https://salsa.debian.org/debian/kvu-display
