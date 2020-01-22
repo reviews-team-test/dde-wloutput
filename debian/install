@@ -1,1 +1,1 @@
-obj-x86_64-linux-gnu/dde_wloutput /usr/bin
+obj-*-linux-gnu/dde_wloutput /usr/bin
