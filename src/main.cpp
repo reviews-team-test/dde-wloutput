@@ -52,6 +52,7 @@ struct command_set {
 
 struct command_argument {
         bool cmd_get;
+        bool cmd_monitor;
         struct command_set cmd_set;
 };
 
@@ -73,6 +74,10 @@ void parse_arguments(char **argv)
         cmd_args->cmd_get = true;
         return;
     }
+    if (QString(argv[1]).compare("monitor") == 0) {
+        cmd_args->cmd_monitor = true;
+        return;
+    }
 
     qDebug()<<"11111"<<cmd_args->cmd_set.uuid<<endl;
     cmd_args->cmd_set.uuid = (char*)calloc(strlen(argv[2]), sizeof(char)+1);
@@ -90,6 +95,26 @@ void parse_arguments(char **argv)
     parse_int_arg(cmd_args, height, argv[7]);
     parse_int_arg(cmd_args, refresh, argv[8]);
     parse_int_arg(cmd_args, transform, argv[9]);
+}
+
+QString get_output_name(QString model, QString make)
+{
+    QString tmode(model);
+    QString uuid = tmode.left(tmode.indexOf(' '));
+    QStringList names = uuid.split(make);
+    if (names[0] == uuid) {
+        // TODO(jouyouyun): improve in future
+        QStringList tmpList = names[0].split("-");
+        if (tmpList.length() <= 2) {
+            uuid = names[0];
+        } else {
+            uuid = tmpList[0] + "-" + tmpList[1];
+        }
+    } else {
+        uuid = names[0];
+    }
+
+    return uuid;
 }
 
 void free_command_argument(struct command_argument *manager)
@@ -166,10 +191,9 @@ void set_output(Registry *reg)
             QObject::connect(dev, &OutputDevice::changed, [dev] {
                 beConnect = true;
 
-                QString tmode(dev->model());
-                QString uuid = tmode.left(tmode.indexOf(' '));
+                QString uuid = get_output_name(QString(dev->model()), QString(dev->manufacturer()));
                 if (cmd_args->cmd_set.uuid != uuid) {
-                    qDebug() << "skip output:" << uuid;
+                    qDebug() << "skip output:" << uuid<<"---"<<cmd_args->cmd_set.uuid;
                     return;
                 }
                 qDebug() << "start set output " << uuid;
@@ -206,38 +230,79 @@ void set_output(Registry *reg)
     });
 }
 
+
+void output_monitor(Registry *reg)
+{
+    QObject::connect(reg, &Registry::outputManagementAnnounced, [reg](quint32 name, quint32 version) {
+        qDebug() << "[Output] management announced with name :" << name << " & version :" << version;
+        qDebug() << "\treg pt :" << reg << "\treg is valid :" << reg->isValid();
+        manager = reg->createOutputManagement(name, version);
+        if (!manager || !manager->isValid()) {
+            qDebug() << "create manager is nullptr or not valid!";
+            return;
+        }
+        conf = manager->createConfiguration();
+        if (!conf || !conf->isValid()) {
+            qDebug() << "create output configure is null or is not vaild";
+            return;
+        }
+        QObject::connect(reg, &Registry::outputDeviceAnnounced, [reg](quint32 name, quint32 version) {
+            auto dev = reg->createOutputDevice(name, version);
+            if (!dev || !dev->isValid()) {
+                qDebug() << "get dev is null or not valid!";
+                return;
+            }
+
+            QObject::connect(dev, &OutputDevice::changed, [dev] {
+                qDebug()<<"[Output] [Change] "<<dev->manufacturer()<<dev->model()<<dev->uuid()<<dev->globalPosition()<<dev->pixelSize();
+            });
+            QObject::connect(dev, &OutputDevice::removed, [dev]{
+                qDebug()<<"[Output] [Change] "<<dev->manufacturer()<<dev->model()<<dev->uuid()<<dev->globalPosition()<<dev->pixelSize();
+            });
+        });
+    });
+}
+
+void print_usage(const char *prog) {
+    qDebug()<<"Usage: "<<prog<<"<get>/<monitor>/<set <uuid> <enable> <x> <y> <width> <height> <refresh> <transform>>";
+}
+
 // command:
 //          get
+//          monitor
 //          set output eanble x y width height refresh transform
 int main(int argc, char *argv[])
 {
-    if (argc < 2 || (QString(argv[1]).compare("set") && QString(argv[1]).compare("get")) ||
+    QCoreApplication app(argc, argv);
+    auto conn = new ConnectionThread;
+    auto thread = new QThread;
+    Registry *reg = nullptr;
+
+    if (argc < 2 || (QString(argv[1]).compare("set") && QString(argv[1]).compare("get") && QString(argv[1]).compare("monitor")) ||
             (QString(argv[1]).compare("set") == 0 && argc != 10) ||
+            (QString(argv[1]).compare("monitor") == 0 && argc != 2) ||
             (QString(argv[1]).compare("get") == 0 && argc != 2)) {
-        qDebug()<<"Usage: "<<argv[0]<<"<get>/<set <uuid> <enable> <x> <y> <width> <height> <refresh> <transform>>";
-        return -1;
+        goto usage;
     }
 
     parse_arguments(argv);
-
-    QCoreApplication app(argc, argv);
-
-    auto conn = new ConnectionThread;
-    auto thread = new QThread;
     conn->moveToThread(thread);
     thread->start();
 
     conn->initConnection();
 
-    Registry *reg = nullptr;
     QObject::connect(conn, &ConnectionThread::connected, [ & ] {
 
         reg = new Registry;
         reg->create(conn);
         reg->setup();
 
+        bool tmp = false;
         if (cmd_args->cmd_get) {
             dump_outputs(reg);
+        } else if (cmd_args->cmd_monitor) {
+            tmp = true;
+            output_monitor(reg);
         } else {
             set_output(reg);
         }
@@ -248,7 +313,7 @@ int main(int argc, char *argv[])
         });
 
         do {
-            beConnect = false;
+            beConnect = tmp;
             conn->roundtrip();
         } while (beConnect);
 
@@ -288,4 +353,8 @@ int main(int argc, char *argv[])
     });
 
     return app.exec();
+
+usage:
+    print_usage(argv[0]);
+    return -1;
 }
