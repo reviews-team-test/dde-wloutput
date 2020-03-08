@@ -150,7 +150,7 @@ void dump_outputs(Registry *reg) {
 
             auto modes = dev->modes();
             for(auto m : modes) {
-                std::cout<<"\t" << m.size.width()<<"x"<<m.size.height() << "\t" << m.refreshRate/1000.0;
+                std::cout<<"\t" << m.id <<"\t" << m.size.width()<<"x"<<m.size.height() << "\t" << m.refreshRate/1000.0;
                 std::cout<<((m.flags & modeFlag::Current)?"\tcurrent":"");
                 std::cout<<((m.flags & modeFlag::Preferred)?"\tpreferred":"")<<std::endl;
                 //                qDebug()<<"\t" << m.size.width()<<"x"<<m.size.height() << "\t" << m.refreshRate/1000.0
