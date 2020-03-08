@@ -191,7 +191,7 @@ void set_output(Registry *reg)
             QObject::connect(dev, &OutputDevice::changed, [dev] {
                 beConnect = true;
 
-                QString uuid = get_output_name(QString(dev->model()), QString(dev->manufacturer()));
+                QString uuid = dev->uuid();
                 if (cmd_args->cmd_set.uuid != uuid) {
                     qDebug() << "skip output:" << uuid<<"---"<<cmd_args->cmd_set.uuid;
                     return;
