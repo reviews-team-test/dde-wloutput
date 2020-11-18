@@ -27,6 +27,8 @@
 #include <QCoreApplication>
 #include <QThread>
 #include <QDebug>
+#include <QMap>
+#include <QMapIterator>
 
 #include <outputdevice.h>
 #include <registry.h>
@@ -42,34 +44,38 @@ enum modeFlag {
     Preferred = 1 << 1
 };
 
-struct command_set {
+class command_set {
+public:
     bool enabled;
-    char *uuid;
+    QString uuid;
     int x, y;
     int width, height;
     int refresh, transform;
+    bool used;
 };
 
-struct command_argument {
+class command_argument {
+    public:
         bool cmd_get;
         bool cmd_monitor;
-        struct command_set cmd_set;
+        QMap<QString,command_set> cmd_set;
 };
 
-static struct command_argument *cmd_args = nullptr;
+static command_argument *cmd_args = nullptr;
 static bool beConnect = false;
 
 
 static OutputManagement *manager = nullptr;
 static OutputConfiguration *conf = nullptr;
 
-#define parse_int_arg(manager,item,str) do { \
-    manager->cmd_set.item = (int32_t)QString(str).toInt(); \
+#define parse_int_arg(dev,item,str) do { \
+    dev.item = (int32_t)QString(str).toInt(); \
     } while(0);
 
-void parse_arguments(char **argv)
+//./dde_wloutput set e56ac6dfa7 1 0 0 1600 1200 60 f457c545a9 1 0 0 1600 1200 59.869
+void parse_arguments(int argc,char **argv)
 {
-    cmd_args = (struct command_argument*)calloc(1, sizeof(struct command_argument));
+    cmd_args = new command_argument;
     if (QString(argv[1]).compare("get") == 0) {
         cmd_args->cmd_get = true;
         return;
@@ -79,22 +85,37 @@ void parse_arguments(char **argv)
         return;
     }
 
-    qDebug()<<"11111"<<cmd_args->cmd_set.uuid<<endl;
-    cmd_args->cmd_set.uuid = (char*)calloc(strlen(argv[2]), sizeof(char)+1);
-    strcpy(cmd_args->cmd_set.uuid, argv[2]);
-
-    if (QString(argv[3]).toInt() == 1) {
-        cmd_args->cmd_set.enabled = true;
-    } else {
-        cmd_args->cmd_set.enabled = false;
+    //do set parser
+    //dde_wloutput set <uuid> <enable> <x> <y> <width> <height> <refresh> <transform>
+    //添加多组屏幕同时设置的需求
+    if(argc%8 != 2){
+        return;
     }
+    int cnt = (argc-2)/8;
+    qDebug()<< "cnt" << cnt;
+    cmd_args->cmd_set.clear();
+    for(int i=0;i<cnt;i++){
+        command_set cs;
+        int startIndex = i*8;
+        cs.uuid = QString(argv[2 + startIndex]);
 
-    parse_int_arg(cmd_args, x, argv[4]);
-    parse_int_arg(cmd_args, y, argv[5]);
-    parse_int_arg(cmd_args, width, argv[6]);
-    parse_int_arg(cmd_args, height, argv[7]);
-    parse_int_arg(cmd_args, refresh, argv[8]);
-    parse_int_arg(cmd_args, transform, argv[9]);
+        qDebug()<< "do here:"<<cs.uuid;
+        if (QString(argv[3+startIndex]).toInt() == 1) {
+            cs.enabled = true;
+        } else {
+            cs.enabled = false;
+        }
+
+        parse_int_arg(cs, x, argv[4+startIndex]);
+        parse_int_arg(cs, y, argv[5+startIndex]);
+        parse_int_arg(cs, width, argv[6+startIndex]);
+        parse_int_arg(cs, height, argv[7+startIndex]);
+        parse_int_arg(cs, refresh, argv[8+startIndex]);
+        parse_int_arg(cs, transform, argv[9+startIndex]);
+        qDebug()<<"parse_int_arg" << cs.uuid<<"x:"<<cs.x<<"y:"<<cs.y<<"w:"<<cs.width<<"h:"<<cs.height;
+        cs.used = false;
+        cmd_args->cmd_set.insert(cs.uuid,cs);
+    }    
 }
 
 QString get_output_name(QString model, QString make)
@@ -121,10 +142,7 @@ void free_command_argument(struct command_argument *manager)
 {
     if (!manager) {
         return;
-    }
-    if (manager->cmd_set.uuid) {
-        free(manager->cmd_set.uuid);
-    }
+    }    
     free(manager);
 }
 
@@ -192,26 +210,50 @@ void set_output(Registry *reg)
                 beConnect = true;
 
                 QString uuid = dev->uuid();
-                if (cmd_args->cmd_set.uuid != uuid) {
-                    qDebug() << "skip output:" << uuid<<"---"<<cmd_args->cmd_set.uuid;
+                //if (cmd_args->cmd_set.uuid != uuid) {
+                if(!cmd_args->cmd_set.contains(uuid)){
+                    qDebug() << "skip output:" << uuid<<"---"<<uuid;
                     return;
                 }
+                
                 qDebug() << "start set output " << uuid;
                 for (auto m : dev->modes()) {
-                    if (m.size.width() == cmd_args->cmd_set.width
-                            && m.size.height() == cmd_args->cmd_set.height
-                            && m.refreshRate == cmd_args->cmd_set.refresh) {
-                        qDebug() << "set output mode :" << cmd_args->cmd_set.width << "x" << cmd_args->cmd_set.height
-                                 << "and refreshRate :" << cmd_args->cmd_set.refresh;
+                    if (m.size.width() == cmd_args->cmd_set[uuid].width
+                            && m.size.height() == cmd_args->cmd_set[uuid].height
+                            && m.refreshRate == cmd_args->cmd_set[uuid].refresh) {
+                        qDebug() << "set output mode :" << cmd_args->cmd_set[uuid].width << "x" << cmd_args->cmd_set[uuid].height
+                                 << "and refreshRate :" << cmd_args->cmd_set[uuid].refresh;
                         conf->setMode(dev, m.id);
                         break;
                     }
                 }
-                conf->setPosition(dev, QPoint(cmd_args->cmd_set.x, cmd_args->cmd_set.y));
-                conf->setEnabled(dev, OutputDevice::Enablement(cmd_args->cmd_set.enabled));
-                qDebug() << "set output transform to " << cmd_args->cmd_set.transform;
-                conf->setTransform(dev, OutputDevice::Transform(cmd_args->cmd_set.transform));
-                conf->apply();
+                conf->setPosition(dev, QPoint(cmd_args->cmd_set[uuid].x, cmd_args->cmd_set[uuid].y));
+                conf->setEnabled(dev, OutputDevice::Enablement(cmd_args->cmd_set[uuid].enabled));
+                qDebug() << "set output transform to " << cmd_args->cmd_set[uuid].transform;
+                conf->setTransform(dev, OutputDevice::Transform(cmd_args->cmd_set[uuid].transform));
+                cmd_args->cmd_set[QString(uuid)].used = true;
+
+                qDebug()<<cmd_args->cmd_set[uuid].uuid<<cmd_args->cmd_set[uuid].x;
+                
+                bool setEnd = true;
+                QMapIterator<QString, command_set> i(cmd_args->cmd_set);
+                while (i.hasNext()) {
+                    i.next();
+                    if (i.value().used == false) {
+                        qDebug()<<"do this";
+                        qDebug()<<"used "<<i.value().uuid;
+                        setEnd = false;
+                        qDebug()<<"aaa";
+                        break;
+                    }
+                    qDebug()<<i.key();
+                    qDebug()<<i.value().used<<i.value().x<<i.value().y<<i.value().uuid;
+                }
+                if(setEnd){
+                    qDebug()<<"do set";
+                    conf->apply();
+                }
+                
                 if (dev)
                     dev->deleteLater();
             });
@@ -279,13 +321,13 @@ int main(int argc, char *argv[])
     Registry *reg = nullptr;
 
     if (argc < 2 || (QString(argv[1]).compare("set") && QString(argv[1]).compare("get") && QString(argv[1]).compare("monitor")) ||
-            (QString(argv[1]).compare("set") == 0 && argc != 10) ||
+            (QString(argv[1]).compare("set") == 0 && argc % 8 != 2) ||
             (QString(argv[1]).compare("monitor") == 0 && argc != 2) ||
             (QString(argv[1]).compare("get") == 0 && argc != 2)) {
         goto usage;
     }
 
-    parse_arguments(argv);
+    parse_arguments(argc,argv);
     conn->moveToThread(thread);
     thread->start();
 
@@ -340,7 +382,7 @@ int main(int argc, char *argv[])
     });
     QObject::connect(conn, &ConnectionThread::connectionDied, [ & ] {
         qDebug() << "connect failed to wayland at socket:" << conn->socketName();
-        free_command_argument(cmd_args);
+        delete cmd_args;
 
         if (reg)
             reg->deleteLater();
