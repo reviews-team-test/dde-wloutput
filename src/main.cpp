@@ -331,13 +331,9 @@ int main(int argc, char *argv[])
     conn->moveToThread(thread);
     thread->start();
 
-    conn->initConnection();
-
     QObject::connect(conn, &ConnectionThread::connected, [ & ] {
 
         reg = new Registry;
-        reg->create(conn);
-        reg->setup();
 
         bool tmp = false;
         if (cmd_args->cmd_get) {
@@ -353,6 +349,9 @@ int main(int argc, char *argv[])
             qDebug() << "output device removed with name: " << name;
             beConnect = true;
         });
+
+        reg->create(conn);
+        reg->setup();
 
         do {
             beConnect = tmp;
@@ -393,7 +392,7 @@ int main(int argc, char *argv[])
 
         exit(-1);
     });
-
+    conn->initConnection();
     return app.exec();
 
 usage:
