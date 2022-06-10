@@ -1,4 +1,10 @@
-kvu-display (0.0.1-1) unstable; urgency=medium
+dde-wloutput (1.1.0-1) UNRELEASED; urgency=medium
+
+  * Modify project name (Closes: #nnnn)  <nnnn is the bug number of your ITP>
+
+ -- wubowen <wubowen@uniontech.com>  Fri, 10 Jun 2022 12:47:26 +0800
+
+dde-wloutput (0.0.1-1) unstable; urgency=medium
 
   * Initial release (Closes: #nnnn)  <nnnn is the bug number of your ITP>
 
