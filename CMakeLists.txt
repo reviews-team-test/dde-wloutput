@@ -6,8 +6,8 @@ set(TARGET_NAME dde_wloutput)
 
 add_executable(${TARGET_NAME} src/main.cpp)
 
-find_package(KF5Wayland REQUIRED)
 # Find the library
+find_package(KF5Wayland REQUIRED)
 find_package(PkgConfig REQUIRED)
 find_package(Qt5 COMPONENTS
     Core
