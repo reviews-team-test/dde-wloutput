@@ -224,7 +224,7 @@ void set_output(Registry *reg)
                             && (*oIter)->refreshRate() == cmd_args->cmd_set[uuid].refresh) {
                         qDebug() << "set output mode :" << cmd_args->cmd_set[uuid].width << "x" << cmd_args->cmd_set[uuid].height
                                  << "and refreshRate :" << cmd_args->cmd_set[uuid].refresh;
-                        conf->setMode(dev, ++index);
+                        conf->setMode(dev, index++);
                         break;
                     }
                 }
