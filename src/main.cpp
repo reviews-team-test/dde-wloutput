@@ -218,13 +218,13 @@ void set_output(Registry *reg)
                 qDebug() << "start set output " << uuid;
                 auto modes = dev->modes();
                 int index = 0;
-                for (auto oIter = modes.begin(); oIter != modes.end(); ++oIter) {
+                for (auto oIter = modes.begin(); oIter != modes.end(); ++oIter, ++index) {
                     if ((*oIter)->size().width() == cmd_args->cmd_set[uuid].width
                             && (*oIter)->size().height() == cmd_args->cmd_set[uuid].height
                             && (*oIter)->refreshRate() == cmd_args->cmd_set[uuid].refresh) {
                         qDebug() << "set output mode :" << cmd_args->cmd_set[uuid].width << "x" << cmd_args->cmd_set[uuid].height
                                  << "and refreshRate :" << cmd_args->cmd_set[uuid].refresh;
-                        conf->setMode(dev, index++);
+                        conf->setMode(dev, index);
                         break;
                     }
                 }
