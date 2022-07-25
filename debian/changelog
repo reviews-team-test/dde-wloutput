@@ -1,3 +1,10 @@
+dde-wloutput (2.0.2) unstable; urgency=medium
+
+  [ TagBuilder ]
+  * fix: 修复wayland环境下设置分辨率异常的问题(Task: 147205)(Influence: 正常设置分辨率)
+
+ -- caixiangrong <caixiangrong@uniontech.com>  Mon, 25 Jul 2022 11:33:10 +0800
+
 dde-wloutput (2.0.1) unstable; urgency=medium
 
   * dde-flow-sprint1
