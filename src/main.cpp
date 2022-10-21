@@ -30,11 +30,11 @@
 #include <QMap>
 #include <QMapIterator>
 
-#include <outputdevice_v2.h>
-#include <registry.h>
-#include <connection_thread.h>
-#include <outputconfiguration_v2.h>
-#include <outputmanagement_v2.h>
+#include <DWayland/Client/outputdevice_v2.h>
+#include <DWayland/Client/registry.h>
+#include <DWayland/Client/connection_thread.h>
+#include <DWayland/Client/outputconfiguration_v2.h>
+#include <DWayland/Client/outputmanagement_v2.h>
 
 using namespace KWayland::Client;
 
