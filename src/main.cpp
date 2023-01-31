@@ -30,11 +30,11 @@
 #include <QMap>
 #include <QMapIterator>
 
-#include <outputdevice.h>
-#include <registry.h>
-#include <connection_thread.h>
-#include <outputconfiguration.h>
-#include <outputmanagement.h>
+#include <DWayland/Client/outputdevice_v2.h>
+#include <DWayland/Client/registry.h>
+#include <DWayland/Client/connection_thread.h>
+#include <DWayland/Client/outputconfiguration_v2.h>
+#include <DWayland/Client/outputmanagement_v2.h>
 
 using namespace KWayland::Client;
 
@@ -65,8 +65,8 @@ static command_argument *cmd_args = nullptr;
 static bool beConnect = false;
 
 
-static OutputManagement *manager = nullptr;
-static OutputConfiguration *conf = nullptr;
+static OutputManagementV2 *manager = nullptr;
+static OutputConfigurationV2 *conf = nullptr;
 
 #define parse_int_arg(dev,item,str) do { \
     dev.item = (int32_t)QString(str).toInt(); \
@@ -115,7 +115,7 @@ void parse_arguments(int argc,char **argv)
         qDebug()<<"parse_int_arg" << cs.uuid<<"x:"<<cs.x<<"y:"<<cs.y<<"w:"<<cs.width<<"h:"<<cs.height;
         cs.used = false;
         cmd_args->cmd_set.insert(cs.uuid,cs);
-    }    
+    }
 }
 
 QString get_output_name(QString model, QString make)
@@ -142,38 +142,37 @@ void free_command_argument(struct command_argument *manager)
 {
     if (!manager) {
         return;
-    }    
+    }
     free(manager);
 }
 
 void dump_outputs(Registry *reg) {
-    QObject::connect(reg, &Registry::outputDeviceAnnounced, [reg](quint32 name, quint32 version){
-        auto dev = reg->createOutputDevice(name, version);
+    QObject::connect(reg, &Registry::outputDeviceV2Announced, [reg](quint32 name, quint32 version){
+        auto dev = reg->createOutputDeviceV2(name, version);
         if (!dev) {
             qDebug() << "get dev error!";
             return;
         }
-        QObject::connect(dev, &OutputDevice::changed, [dev]{
+        QObject::connect(dev, &OutputDeviceV2::changed, [dev]{
             std::cout << dev->model().split(" ").first().toStdString();
-            std::cout<<" "<<((dev->enabled() == OutputDevice::Enablement::Enabled)?"enabled":"disabled");
+            std::cout<<" "<<((dev->enabled() == OutputDeviceV2::Enablement::Enabled)?"enabled":"disabled");
             std::cout<<" "<<dev->pixelSize().width()<<"x"<<dev->pixelSize().height();
             std::cout<<"+"<<dev->globalPosition().x()<<"+"<<dev->globalPosition().y()<<" "<<(dev->refreshRate()/1000.0);
             std::cout<<" "<<int(dev->transform())<<" "<<dev->scaleF()<<" "<<dev->physicalSize().width()<<"x"<<dev->physicalSize().height();
             std::cout<<" "<<dev->uuid().toStdString()<<" "<<dev->manufacturer().toStdString()<<std::endl;
-            //            qDebug()<< dev->model().split(" ").first()<<((dev->enabled() == OutputDevice::Enablement::Enabled)?"enabled":"disabled")
+            //            qDebug()<< dev->model().split(" ").first()<<((dev->enabled() == OutputDeviceV2::Enablement::Enabled)?"enabled":"disabled")
             //                   <<dev->pixelSize().width()<<"x"<<dev->pixelSize().height()
             //                  <<"+"<<dev->globalPosition().x()<<"+"<<dev->globalPosition().y()<<(dev->refreshRate()/1000.0)
             //                 <<int(dev->transform())<<dev->scaleF()<<dev->physicalSize().width()<<"x"<<dev->physicalSize().height()
             //                <<dev->uuid()<<dev->manufacturer();
 
             auto modes = dev->modes();
-            for(auto m : modes) {
-                std::cout<<"\t" << m.id <<"\t" << m.size.width()<<"x"<<m.size.height() << "\t" << m.refreshRate/1000.0;
-                std::cout<<((m.flags & modeFlag::Current)?"\tcurrent":"");
-                std::cout<<((m.flags & modeFlag::Preferred)?"\tpreferred":"")<<std::endl;
-                //                qDebug()<<"\t" << m.size.width()<<"x"<<m.size.height() << "\t" << m.refreshRate/1000.0
-                //                       <<((m.flags & modeFlag::Current)?"\tcurrent":"")
-                //                      <<((m.flags & modeFlag::Preferred)?"\tpreferred":"");
+            int index = 0;
+            for (auto oIter = modes.begin(); oIter != modes.end(); ++oIter)
+            {
+                std::cout<<"\t" << index++ <<"\t" << (*oIter)->size().width()<<"x"<<(*oIter)->size().height() << "\t" << (*oIter)->refreshRate()/1000.0;
+                std::cout<<(((*oIter)->preferred() & modeFlag::Current)?"\tcurrent":"");
+                std::cout<<(((*oIter)->preferred() & modeFlag::Preferred)?"\tpreferred":"")<<std::endl;
             }
             std::cout<<std::endl;
             beConnect = true;
@@ -184,10 +183,10 @@ void dump_outputs(Registry *reg) {
 
 void set_output(Registry *reg)
 {
-    QObject::connect(reg, &Registry::outputManagementAnnounced, [reg](quint32 name, quint32 version) {
+    QObject::connect(reg, &Registry::outputManagementV2Announced, [reg](quint32 name, quint32 version) {
         qDebug() << "output management announced with name :" << name << " & version :" << version;
         qDebug() << "reg pt :" << reg << "\treg is valid :" << reg->isValid();
-        manager = reg->createOutputManagement(name, version);
+        manager = reg->createOutputManagementV2(name, version);
         if (!manager || !manager->isValid()) {
             qDebug() << "create manager is nullptr or not valid!";
             return;
@@ -197,16 +196,16 @@ void set_output(Registry *reg)
             qDebug() << "create output configure is null or is not vaild";
             return;
         }
-        QObject::connect(reg, &Registry::outputDeviceAnnounced, [reg](quint32 name, quint32 version) {
+        QObject::connect(reg, &Registry::outputDeviceV2Announced, [reg](quint32 name, quint32 version) {
             beConnect = true;
 
-            auto dev = reg->createOutputDevice(name, version);
+            auto dev = reg->createOutputDeviceV2(name, version);
             if (!dev || !dev->isValid()) {
                 qDebug() << "get dev is null or not valid!";
                 return;
             }
 
-            QObject::connect(dev, &OutputDevice::changed, [dev] {
+            QObject::connect(dev, &OutputDeviceV2::changed, [dev] {
                 beConnect = true;
 
                 QString uuid = dev->uuid();
@@ -215,25 +214,28 @@ void set_output(Registry *reg)
                     qDebug() << "skip output:" << uuid<<"---"<<uuid;
                     return;
                 }
+
                 qDebug() << "start set output " << uuid;
-                for (auto m : dev->modes()) {
-                    if (m.size.width() == cmd_args->cmd_set[uuid].width
-                            && m.size.height() == cmd_args->cmd_set[uuid].height
-                            && m.refreshRate == cmd_args->cmd_set[uuid].refresh) {
+                auto modes = dev->modes();
+                int index = 0;
+                for (auto oIter = modes.begin(); oIter != modes.end(); ++oIter, ++index) {
+                    if ((*oIter)->size().width() == cmd_args->cmd_set[uuid].width
+                            && (*oIter)->size().height() == cmd_args->cmd_set[uuid].height
+                            && (*oIter)->refreshRate() == cmd_args->cmd_set[uuid].refresh) {
                         qDebug() << "set output mode :" << cmd_args->cmd_set[uuid].width << "x" << cmd_args->cmd_set[uuid].height
                                  << "and refreshRate :" << cmd_args->cmd_set[uuid].refresh;
-                        conf->setMode(dev, m.id);
+                        conf->setMode(dev, index);
                         break;
                     }
                 }
                 conf->setPosition(dev, QPoint(cmd_args->cmd_set[uuid].x, cmd_args->cmd_set[uuid].y));
-                conf->setEnabled(dev, OutputDevice::Enablement(cmd_args->cmd_set[uuid].enabled));
+                conf->setEnabled(dev, OutputDeviceV2::Enablement(cmd_args->cmd_set[uuid].enabled));
                 qDebug() << "set output transform to " << cmd_args->cmd_set[uuid].transform;
-                conf->setTransform(dev, OutputDevice::Transform(cmd_args->cmd_set[uuid].transform));
+                conf->setTransform(dev, OutputDeviceV2::Transform(cmd_args->cmd_set[uuid].transform));
                 cmd_args->cmd_set[QString(uuid)].used = true;
 
                 qDebug()<<cmd_args->cmd_set[uuid].uuid<<cmd_args->cmd_set[uuid].x;
-                
+
                 bool setEnd = true;
                 QMapIterator<QString, command_set> i(cmd_args->cmd_set);
                 while (i.hasNext()) {
@@ -252,17 +254,17 @@ void set_output(Registry *reg)
                     qDebug()<<"do set";
                     conf->apply();
                 }
-                
+
                 if (dev)
                     dev->deleteLater();
             });
         });
-        QObject::connect(conf, &OutputConfiguration::applied, []() {
+        QObject::connect(conf, &OutputConfigurationV2::applied, []() {
             qDebug() << "Configuration applied!";
             conf->deleteLater();
             beConnect = true;
         });
-        QObject::connect(conf, &OutputConfiguration::failed, []() {
+        QObject::connect(conf, &OutputConfigurationV2::failed, []() {
             qDebug() << "Configuration failed!";
             conf->deleteLater();
             beConnect = true;
@@ -274,10 +276,10 @@ void set_output(Registry *reg)
 
 void output_monitor(Registry *reg)
 {
-    QObject::connect(reg, &Registry::outputManagementAnnounced, [reg](quint32 name, quint32 version) {
+    QObject::connect(reg, &Registry::outputManagementV2Announced, [reg](quint32 name, quint32 version) {
         qDebug() << "[Output] management announced with name :" << name << " & version :" << version;
         qDebug() << "\treg pt :" << reg << "\treg is valid :" << reg->isValid();
-        manager = reg->createOutputManagement(name, version);
+        manager = reg->createOutputManagementV2(name, version);
         if (!manager || !manager->isValid()) {
             qDebug() << "create manager is nullptr or not valid!";
             return;
@@ -287,17 +289,17 @@ void output_monitor(Registry *reg)
             qDebug() << "create output configure is null or is not vaild";
             return;
         }
-        QObject::connect(reg, &Registry::outputDeviceAnnounced, [reg](quint32 name, quint32 version) {
-            auto dev = reg->createOutputDevice(name, version);
+        QObject::connect(reg, &Registry::outputDeviceV2Announced, [reg](quint32 name, quint32 version) {
+            auto dev = reg->createOutputDeviceV2(name, version);
             if (!dev || !dev->isValid()) {
                 qDebug() << "get dev is null or not valid!";
                 return;
             }
 
-            QObject::connect(dev, &OutputDevice::changed, [dev] {
+            QObject::connect(dev, &OutputDeviceV2::changed, [dev] {
                 qDebug()<<"[Output] [Change] "<<dev->manufacturer()<<dev->model()<<dev->uuid()<<dev->globalPosition()<<dev->pixelSize();
             });
-            QObject::connect(dev, &OutputDevice::removed, [dev]{
+            QObject::connect(dev, &OutputDeviceV2::removed, [dev]{
                 qDebug()<<"[Output] [Change] "<<dev->manufacturer()<<dev->model()<<dev->uuid()<<dev->globalPosition()<<dev->pixelSize();
             });
         });
@@ -344,7 +346,7 @@ int main(int argc, char *argv[])
             set_output(reg);
         }
 
-        QObject::connect(reg, &Registry::outputDeviceRemoved, [](quint32 name) {
+        QObject::connect(reg, &Registry::outputDeviceV2Removed, [](quint32 name) {
             qDebug() << "output device removed with name: " << name;
             beConnect = true;
         });
